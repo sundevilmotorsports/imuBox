@@ -8,7 +8,7 @@ SparkFun_ISM330DHCX myISM;
 sfe_ism_data_t accelData; 
 sfe_ism_data_t gyroData;
 int xAngle = 0, yAngle = 0, zAngle = 0;
-int xLim, yLim, zLim;
+int xLim = 0, yLim = 0, zLim = 0; //Positive absolute values of the noise threshold determined in calibrateGyro()
 
 void calibrateGyro() {
 	int xMax = 0, yMax = 0, zMax = 0;
@@ -24,11 +24,11 @@ void calibrateGyro() {
 		delay(1);
 	}
 
-	xLim = xMax;
-	yLim = yMax;
-	zLim = zMax;
+	xLim = abs(xMax * 2);
+	yLim = abs(yMax * 2);
+	zLim = abs(zMax * 2);
 
-	Serial.println("xMax: " + String(xMax) + "\tyMax: " + String(yMax) + "\tzMax: " + String(zMax));
+	Serial.println("xLim: " + String(xLim) + "\tyLim: " + String(yLim) + "\tzLim: " + String(zLim));
 }
 
 void setup() {
@@ -86,9 +86,10 @@ void setup() {
 void loop() {
   // Check if both gyroscope and accelerometer data is available.
 	if( myISM.checkStatus()){
-	  //myISM.getAccel(&accelData);
+		//myISM.getAccel(&accelData);
 		myISM.getGyro(&gyroData);
-    /*
+
+		/*
 		Serial.print("\nAccelerometer: ");
 		Serial.print("X: ");
 		Serial.print(accelData.xData);
@@ -99,62 +100,82 @@ void loop() {
 		Serial.print("Z: ");
 		Serial.print(accelData.zData);
 		Serial.println(" ");
-    
-	*/
-	Serial.print("X: ");
-	Serial.print(gyroData.xData);
-	Serial.print("\tY: ");
-	Serial.print(gyroData.yData);
-	Serial.print("\tZ: ");
-	Serial.println(gyroData.zData);
+		*/
 
-	//gyroData.xData and its y- and z-equivalents are in millidegrees/sec.
-	//For visual testing of the sensor, set conversionFactor 10,000 to convert to degrees/tenth of a second.
-	//For normal usage, keep at 10 to convert to millidegrees/tenth of a second.
+		Serial.print("X: ");
+		if (abs(gyroData.xData) > xLim) {
+			Serial.print(gyroData.xData);
+			xAngle = xAngle + gyroData.xData;
+		}
+		else {
+			Serial.print("---");
+		}
 
-	double conversionFactor = 1;//10000;
-	/*
-	Serial.print("Gyroscope: ");
-    Serial.print("X: ");
-    if (abs(gyroData.xData) > 250) {
-		Serial.print(gyroData.xData/conversionFactor);
-		xAngle += gyroData.xData/conversionFactor;
-    }
-    else {
-    	Serial.print(0);
-    }
+		Serial.print("\tY: ");
+		if (abs(gyroData.yData) > yLim) {
+			Serial.print(gyroData.yData);
+			yAngle = yAngle + gyroData.yData;
+		}
+		else {
+			Serial.print("---");
+		}
 
-    Serial.print(" ");
+		Serial.print("\tZ: ");
+		if (abs(gyroData.zData) > zLim) {
+			Serial.println(gyroData.zData);
+			zAngle = zAngle + gyroData.zData;
+		}
+		else {
+			Serial.println("---");
+		}
 
-    Serial.print("    Y: ");
-    if (abs(gyroData.yData) > 450) {
-		Serial.print(gyroData.yData/conversionFactor);
-		yAngle += gyroData.yData/conversionFactor;
-    }
-    else {
-    	Serial.print(0);
-    }
+		//gyroData.xData and its y- and z-equivalents are in millidegrees/sec.
+		//For visual testing of the sensor, set conversionFactor 10,000 to convert to degrees/tenth of a second.
+		//For normal usage, keep at 10 to convert to millidegrees/tenth of a second.
 
-	Serial.print(" ");
+		double conversionFactor = 1;//10000;
+		/*
+		Serial.print("Gyroscope: ");
+		Serial.print("X: ");
+		if (abs(gyroData.xData) > 250) {
+			Serial.print(gyroData.xData/conversionFactor);
+			xAngle += gyroData.xData/conversionFactor;
+		}
+		else {
+			Serial.print(0);
+		}
 
-    Serial.print("    Z: ");
-    if (abs(gyroData.zData) > 70) {
-		Serial.println(gyroData.zData/conversionFactor);
-		zAngle += gyroData.zData/conversionFactor;
-    }
-    else {
-    	Serial.println(0);
-    }  
+		Serial.print(" ");
 
-	Serial.print("           XPos: ");
-	Serial.print(xAngle);
-	Serial.print(" YPos: ");
-	Serial.print(yAngle);
-	Serial.print(" ZPos: ");
-	Serial.println(zAngle);
-	*/
+		Serial.print("    Y: ");
+		if (abs(gyroData.yData) > 450) {
+			Serial.print(gyroData.yData/conversionFactor);
+			yAngle += gyroData.yData/conversionFactor;
+		}
+		else {
+			Serial.print(0);
+		}
+
+		Serial.print(" ");
+
+		Serial.print("    Z: ");
+		if (abs(gyroData.zData) > 70) {
+			Serial.println(gyroData.zData/conversionFactor);
+			zAngle += gyroData.zData/conversionFactor;
+		}
+		else {
+			Serial.println(0);
+		}  
+		*/
+		Serial.print("       							    XPos: ");
+		Serial.print(xAngle);
+		Serial.print(" YPos: ");
+		Serial.print(yAngle);
+		Serial.print(" ZPos: ");
+		Serial.println(zAngle);
+		
 
 
-  	delay(10);
+		delay(10);
 	}
 }
