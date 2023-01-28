@@ -7,13 +7,39 @@ SparkFun_ISM330DHCX myISM;
 // Structs for X,Y,Z data
 sfe_ism_data_t accelData; 
 sfe_ism_data_t gyroData;
-double xAngle, yAngle, zAngle;
+int xAngle = 0, yAngle = 0, zAngle = 0;
+int xLim, yLim, zLim;
+
+void calibrateGyro() {
+	int xMax = 0, yMax = 0, zMax = 0;
+	while(!myISM.checkGyroStatus()) {
+		delay(1);
+	}
+
+	myISM.getGyro(&gyroData);
+	for (int i = 0; i < 1000; i++) {
+		if(abs(gyroData.xData) > xMax) xMax = gyroData.xData;
+		if(abs(gyroData.yData) > yMax) yMax = gyroData.yData;
+		if(abs(gyroData.zData) > zMax) zMax = gyroData.zData;
+		delay(1);
+	}
+
+	xLim = xMax;
+	yLim = yMax;
+	zLim = zMax;
+
+	Serial.println("xMax: " + String(xMax) + "\tyMax: " + String(yMax) + "\tzMax: " + String(zMax));
+}
 
 void setup() {
   // put your setup code here, to run once:
   Wire.begin();
 
 	Serial.begin(115200);
+
+	while(!Serial) {
+		delay(1);
+	}
 
 	if(!myISM.begin() ){
 		Serial.println("Did not begin.");
@@ -41,8 +67,8 @@ void setup() {
 	myISM.setAccelFullScale(ISM_4g); 
 
 	// Set the output data rate and precision of the gyroscope
-	myISM.setGyroDataRate(ISM_GY_ODR_104Hz);
-	myISM.setGyroFullScale(ISM_500dps); 
+	myISM.setGyroDataRate(ISM_GY_ODR_52Hz);
+	myISM.setGyroFullScale(ISM_125dps); 
 
 	// Turn on the accelerometer's filter and apply settings. 
 	myISM.setAccelFilterLP2();
@@ -52,11 +78,14 @@ void setup() {
 	myISM.setGyroFilterLP1();
 	myISM.setGyroLP1Bandwidth(ISM_MEDIUM);
 
+	delay(500);
+	calibrateGyro();
+
 }
 
 void loop() {
   // Check if both gyroscope and accelerometer data is available.
-	if( myISM.checkStatus() ){
+	if( myISM.checkStatus()){
 	  //myISM.getAccel(&accelData);
 		myISM.getGyro(&gyroData);
     /*
@@ -72,13 +101,19 @@ void loop() {
 		Serial.println(" ");
     
 	*/
+	Serial.print("X: ");
+	Serial.print(gyroData.xData);
+	Serial.print("\tY: ");
+	Serial.print(gyroData.yData);
+	Serial.print("\tZ: ");
+	Serial.println(gyroData.zData);
 
 	//gyroData.xData and its y- and z-equivalents are in millidegrees/sec.
 	//For visual testing of the sensor, set conversionFactor 10,000 to convert to degrees/tenth of a second.
 	//For normal usage, keep at 10 to convert to millidegrees/tenth of a second.
 
-	double conversionFactor = 10000;
-
+	double conversionFactor = 1;//10000;
+	/*
 	Serial.print("Gyroscope: ");
     Serial.print("X: ");
     if (abs(gyroData.xData) > 250) {
@@ -117,7 +152,9 @@ void loop() {
 	Serial.print(yAngle);
 	Serial.print(" ZPos: ");
 	Serial.println(zAngle);
+	*/
 
-  	delay(100);
+
+  	delay(10);
 	}
 }
