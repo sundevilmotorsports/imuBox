@@ -7,8 +7,14 @@ SparkFun_ISM330DHCX myISM;
 // Structs for X,Y,Z data
 sfe_ism_data_t accelData; 
 sfe_ism_data_t gyroData;
-int xAngle = 0, yAngle = 0, zAngle = 0;
+int xAngle = 0, yAngle = 0, zAngle = 0; //calculated absolute position in the x, y, and z axes
 int xLim = 0, yLim = 0, zLim = 0; //Positive absolute values of the noise threshold determined in calibrateGyro()
+byte counter; //keeps track of which accelerometer values to replace with each setup() interation
+
+//These store the past 3 x, y, and z accelerometer values to be averaged
+int xValues [3];
+int yValues [3];
+int zValues [3];
 
 void calibrateGyro() {
 	int xMax = 0, yMax = 0, zMax = 0;
@@ -29,6 +35,68 @@ void calibrateGyro() {
 	zLim = abs(zMax * 2);
 
 	Serial.println("xLim: " + String(xLim) + "\tyLim: " + String(yLim) + "\tzLim: " + String(zLim));
+}
+
+void printGyro(int x, int y, int z) {
+
+	/* Commented out whiel testing the averaging method of smoothing accel data
+	Serial.print("X: ");
+	if (abs(x) > xLim) {
+		Serial.print(x);
+		xAngle = xAngle + x;
+	}
+	else {
+		Serial.print("---");
+	}
+
+	Serial.print("\tY: ");
+	if (abs(y) > yLim) {
+		Serial.print(y);
+		yAngle = yAngle + y;
+	}
+	else {
+		Serial.print("---");
+	}
+
+	Serial.print("\tZ: ");
+	if (abs(z) > zLim) {
+		Serial.println(z);
+		zAngle = zAngle + z;
+	}
+	else {
+		Serial.println("---");
+	}
+
+	*/
+
+	Serial.print("X: ");
+	Serial.print(x);
+
+	Serial.print("\tY: ");
+	Serial.print(y);
+
+	Serial.print("\tZ: ");
+	Serial.println(z);
+
+	Serial.print("       							    XPos: ");
+	Serial.print(xAngle);
+	Serial.print(" YPos: ");
+	Serial.print(yAngle);
+	Serial.print(" ZPos: ");
+	Serial.println(zAngle);
+	
+}
+
+int arrayAverage(int* array) {
+
+	byte total = 0;
+
+	for (int i = 0; i<3; i++) {
+		total += array[i];
+	}
+
+	return total/3.0;
+
 }
 
 void setup() {
@@ -102,38 +170,34 @@ void loop() {
 		Serial.println(" ");
 		*/
 
-		Serial.print("X: ");
-		if (abs(gyroData.xData) > xLim) {
-			Serial.print(gyroData.xData);
-			xAngle = xAngle + gyroData.xData;
-		}
-		else {
-			Serial.print("---");
-		}
+		xValues[counter] = gyroData.xData;
+		yValues[counter] = gyroData.yData;
+		zValues[counter] = gyroData.zData;
 
-		Serial.print("\tY: ");
-		if (abs(gyroData.yData) > yLim) {
-			Serial.print(gyroData.yData);
-			yAngle = yAngle + gyroData.yData;
-		}
-		else {
-			Serial.print("---");
-		}
+		if (counter == 2) {
 
-		Serial.print("\tZ: ");
-		if (abs(gyroData.zData) > zLim) {
-			Serial.println(gyroData.zData);
-			zAngle = zAngle + gyroData.zData;
-		}
-		else {
-			Serial.println("---");
-		}
+			if (arrayAverage(xValues) >= xLim) {
+				xAngle += arrayAverage(xValues);
+			}
+			if (arrayAverage(yValues) >= yLim) {
+				yAngle += arrayAverage(yValues);
+			}
+			if (arrayAverage(zValues) >= zLim) {
+				zAngle += arrayAverage(zValues);
+			}
+
+			printGyro(xAngle, yAngle, zAngle);
+
+			counter = 0;
+
+		} else {counter++;}
 
 		//gyroData.xData and its y- and z-equivalents are in millidegrees/sec.
 		//For visual testing of the sensor, set conversionFactor 10,000 to convert to degrees/tenth of a second.
 		//For normal usage, keep at 10 to convert to millidegrees/tenth of a second.
 
 		double conversionFactor = 1;//10000;
+
 		/*
 		Serial.print("Gyroscope: ");
 		Serial.print("X: ");
@@ -167,12 +231,6 @@ void loop() {
 			Serial.println(0);
 		}  
 		*/
-		Serial.print("       							    XPos: ");
-		Serial.print(xAngle);
-		Serial.print(" YPos: ");
-		Serial.print(yAngle);
-		Serial.print(" ZPos: ");
-		Serial.println(zAngle);
 		
 
 
