@@ -1,6 +1,7 @@
 #include <Arduino.h>
 #include "SparkFun_ISM330DHCX.h"
 #include <Wire.h>
+#include <FlexCAN_T4.h>
 
 SparkFun_ISM330DHCX myISM; 
 
@@ -16,92 +17,10 @@ int xValues [3];
 int yValues [3];
 int zValues [3];
 
-void calibrateGyro() {
-	int xMax = 0, yMax = 0, zMax = 0;
-	while(!myISM.checkGyroStatus()) {
-		delay(1);
-	}
-
-	myISM.getGyro(&gyroData);
-	for (int i = 0; i < 1000; i++) {
-		if(abs(gyroData.xData) > xMax) xMax = gyroData.xData;
-		if(abs(gyroData.yData) > yMax) yMax = gyroData.yData;
-		if(abs(gyroData.zData) > zMax) zMax = gyroData.zData;
-		delay(1);
-	}
-
-	xLim = abs(xMax * 2);
-	yLim = abs(yMax * 2);
-	zLim = abs(zMax * 2);
-
-	Serial.println("xLim: " + String(xLim) + "\tyLim: " + String(yLim) + "\tzLim: " + String(zLim));
-}
-
-void printGyro(int x, int y, int z) {
-
-	/* Commented out whiel testing the averaging method of smoothing accel data
-	Serial.print("X: ");
-	if (abs(x) > xLim) {
-		Serial.print(x);
-		xAngle = xAngle + x;
-	}
-	else {
-		Serial.print("---");
-	}
-
-	Serial.print("\tY: ");
-	if (abs(y) > yLim) {
-		Serial.print(y);
-		yAngle = yAngle + y;
-	}
-	else {
-		Serial.print("---");
-	}
-
-	Serial.print("\tZ: ");
-	if (abs(z) > zLim) {
-		Serial.println(z);
-		zAngle = zAngle + z;
-	}
-	else {
-		Serial.println("---");
-	}
-
-	*/
-
-	Serial.print("X: ");
-	Serial.print(x);
-
-	Serial.print("\tY: ");
-	Serial.print(y);
-
-	Serial.print("\tZ: ");
-	Serial.println(z);
-
-	Serial.print("       							    XPos: ");
-	Serial.print(xAngle);
-	Serial.print(" YPos: ");
-	Serial.print(yAngle);
-	Serial.print(" ZPos: ");
-	Serial.println(zAngle);
-	
-}
-
-int arrayAverage(int* array) {
-
-	byte total = 0;
-
-	for (int i = 0; i<3; i++) {
-		total += array[i];
-	}
-
-	return total/3.0;
-
-}
 
 void setup() {
   // put your setup code here, to run once:
-  Wire.begin();
+	Wire.begin();
 
 	Serial.begin(115200);
 
@@ -146,94 +65,47 @@ void setup() {
 	myISM.setGyroFilterLP1();
 	myISM.setGyroLP1Bandwidth(ISM_MEDIUM);
 
+	// Turn on CAN bus
+	FlexCAN_T4FD<CAN3, RX_SIZE_256, TX_SIZE_16> myCAN;
+	myCAN.begin();
+
+	//Set CAN baud rate
+	CANFD_timings_t config;
+	config.clock = CLK_24MHz;
+	config.baudrate = 1000000;
+	config.baudrateFD = 2000000;
+	config.propdelay = 190;
+	config.bus_length = 1;
+	config.sample = 70;
+	FD.setBaudRate(config);
+
+	//CAN mailboxes are interrupt-driven, meaning it does stuff when a message appears
+	myCAN.enableMBInterrupts();
+
 	delay(500);
 	calibrateGyro();
 
 }
 
 void loop() {
+
   // Check if both gyroscope and accelerometer data is available.
-	if( myISM.checkStatus()){
+	if(myISM.checkStatus()){
 		//myISM.getAccel(&accelData);
 		myISM.getGyro(&gyroData);
 
-		/*
-		Serial.print("\nAccelerometer: ");
-		Serial.print("X: ");
-		Serial.print(accelData.xData);
-		Serial.print(" ");
-		Serial.print("Y: ");
-		Serial.print(accelData.yData);
-		Serial.print(" ");
-		Serial.print("Z: ");
-		Serial.print(accelData.zData);
-		Serial.println(" ");
-		*/
-
+		//log current gyro data for averaging later
 		xValues[counter] = gyroData.xData;
 		yValues[counter] = gyroData.yData;
 		zValues[counter] = gyroData.zData;
 
+		//Every 3 loop iterations, average the past 3 gyro data points and print them
 		if (counter == 2) {
-
-			if (arrayAverage(xValues) >= xLim) {
-				xAngle += arrayAverage(xValues);
-			}
-			if (arrayAverage(yValues) >= yLim) {
-				yAngle += arrayAverage(yValues);
-			}
-			if (arrayAverage(zValues) >= zLim) {
-				zAngle += arrayAverage(zValues);
-			}
-
+			calculateAccel(arrayAverage(xValues), arrayAverage(yValues), arrayAverage(zValues))
 			printGyro(xAngle, yAngle, zAngle);
-
-			counter = 0;
-
 		} else {counter++;}
 
-		//gyroData.xData and its y- and z-equivalents are in millidegrees/sec.
-		//For visual testing of the sensor, set conversionFactor 10,000 to convert to degrees/tenth of a second.
-		//For normal usage, keep at 10 to convert to millidegrees/tenth of a second.
-
-		double conversionFactor = 1;//10000;
-
-		/*
-		Serial.print("Gyroscope: ");
-		Serial.print("X: ");
-		if (abs(gyroData.xData) > 250) {
-			Serial.print(gyroData.xData/conversionFactor);
-			xAngle += gyroData.xData/conversionFactor;
-		}
-		else {
-			Serial.print(0);
-		}
-
-		Serial.print(" ");
-
-		Serial.print("    Y: ");
-		if (abs(gyroData.yData) > 450) {
-			Serial.print(gyroData.yData/conversionFactor);
-			yAngle += gyroData.yData/conversionFactor;
-		}
-		else {
-			Serial.print(0);
-		}
-
-		Serial.print(" ");
-
-		Serial.print("    Z: ");
-		if (abs(gyroData.zData) > 70) {
-			Serial.println(gyroData.zData/conversionFactor);
-			zAngle += gyroData.zData/conversionFactor;
-		}
-		else {
-			Serial.println(0);
-		}  
-		*/
-		
-
-
-		delay(10);
 	}
+
+	delay(10);
 }
