@@ -1,7 +1,9 @@
 #include <Arduino.h>
 #include "SparkFun_ISM330DHCX.h"
 #include <Wire.h>
-#include <FlexCAN_T4.h>
+#include "FlexCAN_T4.h"
+
+FlexCAN_T4<CAN1, RX_SIZE_256, TX_SIZE_16> Can0;
 
 SparkFun_ISM330DHCX myISM; 
 
@@ -66,21 +68,12 @@ void setup() {
 	myISM.setGyroLP1Bandwidth(ISM_MEDIUM);
 
 	// Turn on CAN bus
-	FlexCAN_T4FD<CAN3, RX_SIZE_256, TX_SIZE_16> myCAN;
-	myCAN.begin();
-
-	//Set CAN baud rate
-	CANFD_timings_t config;
-	config.clock = CLK_24MHz;
-	config.baudrate = 1000000;
-	config.baudrateFD = 2000000;
-	config.propdelay = 190;
-	config.bus_length = 1;
-	config.sample = 70;
-	FD.setBaudRate(config);
-
-	//CAN mailboxes are interrupt-driven, meaning it does stuff when a message appears
-	myCAN.enableMBInterrupts();
+	Can0.begin();
+	Can0.setBaudRate(1000000);
+	Can0.setMaxMB(16);
+	Can0.enableFIFO();
+	Can0.enableFIFOInterrupt();
+	Can0.mailboxStatus();
 
 	delay(500);
 	calibrateGyro();
@@ -91,9 +84,34 @@ void loop() {
 
   // Check if both gyroscope and accelerometer data is available.
 	if(myISM.checkStatus()){
-		//myISM.getAccel(&accelData);
+		myISM.getAccel(&accelData);
 		myISM.getGyro(&gyroData);
 
+		int xAccel = (int) accelData.xData;
+		int yAccel = (int) accelData.yData;
+		int zAccel = (int) accelData.zData;
+		
+		CAN_message_t msg0;
+		msg0.id = 0x360;
+		msg0.buf[0] = (xAccel & 0xFF000000) >> 24;
+		msg0.buf[1] = (xAccel & 0x00FF0000) >> 16;
+		msg0.buf[2] = (xAccel & 0x0000FF00) >> 8;
+		msg0.buf[3] = xAccel & 0xFF;
+		msg0.buf[4] = (yAccel & 0xFF000000) >> 24;
+		msg0.buf[5] = (yAccel & 0x00FF0000) >> 16;
+		msg0.buf[6] = (yAccel & 0x0000FF00) >> 8;
+		msg0.buf[7] = yAccel & 0xFF;
+		Can0.write(msg0);
+
+		CAN_message_t msg1;
+		msg1.id = 0x361;
+		msg1.buf[0] = (zAccel & 0xFF000000) >> 24;
+		msg1.buf[1] = (zAccel & 0x00FF0000) >> 16;
+		msg1.buf[2] = (zAccel & 0x0000FF00) >> 8;
+		msg1.buf[3] = zAccel & 0xFF;
+		Can0.write(msg1);
+
+		/*
 		//log current gyro data for averaging later
 		xValues[counter] = gyroData.xData;
 		yValues[counter] = gyroData.yData;
@@ -104,6 +122,7 @@ void loop() {
 			calculateAccel(arrayAverage(xValues), arrayAverage(yValues), arrayAverage(zValues))
 			printGyro(xAngle, yAngle, zAngle);
 		} else {counter++;}
+		*/
 
 	}
 

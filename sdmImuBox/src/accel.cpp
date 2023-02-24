@@ -1,5 +1,4 @@
-#include <Arduino.h>
-#include "SparkFun_ISM330DHCX.h"
+#include "accel.h"
 
 void calibrateGyro() {
 	int xMax = 0, yMax = 0, zMax = 0;
