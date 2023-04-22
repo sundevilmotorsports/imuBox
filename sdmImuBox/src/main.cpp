@@ -10,6 +10,8 @@ SparkFun_ISM330DHCX myISM;
 // Structs for X,Y,Z data
 sfe_ism_data_t accelData; 
 sfe_ism_data_t gyroData;
+
+/*
 int xAngle = 0, yAngle = 0, zAngle = 0; //calculated absolute position in the x, y, and z axes
 int xLim = 0, yLim = 0, zLim = 0; //Positive absolute values of the noise threshold determined in calibrateGyro()
 byte counter; //keeps track of which accelerometer values to replace with each setup() interation
@@ -18,6 +20,7 @@ byte counter; //keeps track of which accelerometer values to replace with each s
 int xValues [3];
 int yValues [3];
 int zValues [3];
+*/
 
 
 void setup() {
@@ -25,14 +28,18 @@ void setup() {
 	Wire.begin();
 
 	Serial.begin(115200);
+	pinMode(13, OUTPUT);
 
-	while(!Serial) {
-		delay(1);
-	}
+	delay(100);
 
-	if(!myISM.begin() ){
+	if( !myISM.begin() ){
 		Serial.println("Did not begin.");
-		while(1);
+		while( 1 ) {
+			digitalWrite(13, HIGH);
+			delay(1000);
+			digitalWrite(13, LOW);
+			delay(1000);
+		}
 	}
 
 	// Reset the device to default settings. This if helpful is you're doing multiple
@@ -53,7 +60,7 @@ void setup() {
 	
 	// Set the output data rate and precision of the accelerometer
 	myISM.setAccelDataRate(ISM_XL_ODR_104Hz);
-	myISM.setAccelFullScale(ISM_4g); 
+	myISM.setAccelFullScale(ISM_2g); 
 
 	// Set the output data rate and precision of the gyroscope
 	myISM.setGyroDataRate(ISM_GY_ODR_52Hz);
@@ -76,11 +83,11 @@ void setup() {
 	Can0.mailboxStatus();
 
 	delay(500);
-	calibrateGyro();
 
 }
 
 void loop() {
+	digitalWrite(13, HIGH);
 
   // Check if both gyroscope and accelerometer data is available.
 	if(myISM.checkStatus()){
@@ -109,7 +116,29 @@ void loop() {
 		msg1.buf[1] = (zAccel & 0x00FF0000) >> 16;
 		msg1.buf[2] = (zAccel & 0x0000FF00) >> 8;
 		msg1.buf[3] = zAccel & 0xFF;
+
+		int xGyro = (int) gyroData.xData;
+		int yGyro = (int) gyroData.yData;
+		int zGyro = (int) gyroData.zData;
+
+		msg1.buf[4] = (xGyro & 0xFF000000) >> 24;
+		msg1.buf[5] = (xGyro & 0x00FF0000) >> 16;
+		msg1.buf[6] = (xGyro & 0x0000FF00) >> 8;
+		msg1.buf[7] = xGyro & 0xFF;
+
 		Can0.write(msg1);
+
+		CAN_message_t msg2;
+		msg2.id = 0x362;
+		msg2.buf[0] = (yGyro & 0xFF000000) >> 24;
+		msg2.buf[1] = (yGyro & 0x00FF0000) >> 16;
+		msg2.buf[2] = (yGyro & 0x0000FF00) >> 8;
+		msg2.buf[3] = yGyro & 0xFF;
+		msg2.buf[4] = (zGyro & 0xFF000000) >> 24;
+		msg2.buf[5] = (zGyro & 0x00FF0000) >> 16;
+		msg2.buf[6] = (zGyro & 0x0000FF00) >> 8;
+		msg2.buf[7] = zGyro & 0xFF;
+		Can0.write(msg2);
 
 		/*
 		//log current gyro data for averaging later
@@ -125,6 +154,11 @@ void loop() {
 		*/
 
 	}
+	    static uint32_t timeout = millis();
+  if ( millis() - timeout > 5000 ) {
+    Can0.mailboxStatus();
+    timeout = millis();
+  }
 
-	delay(10);
+	delay(20);
 }
