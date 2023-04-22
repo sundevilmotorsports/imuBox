@@ -12,10 +12,16 @@ int xAngle = 0, yAngle = 0, zAngle = 0; //calculated absolute position in the x,
 int xLim = 0, yLim = 0, zLim = 0; //Positive absolute values of the noise threshold determined in calibrateGyro()
 byte counter; //keeps track of which accelerometer values to replace with each setup() interation
 
-//These store the past 3 x, y, and z accelerometer values to be averaged
-int xValues [3];
-int yValues [3];
-int zValues [3];
+//The number of loops run before the x, y, and z accelerometer values are averaged
+int averagerCounter = 3;
+//These store the past 3 x, y, and z accelerometer values
+int xValues [averagerCounter];
+int yValues [averagerCounter];
+int zValues [averagerCounter];
+
+//Objects to be sent on the CANFD bus.
+CANFD_message_t canAccelMessage, canDirectionMessage;
+//canAccelMessage holds x, y, z acceleration data. canDirectionMessage holds pitch, roll, and yaw (still unimplemented)
 
 
 void setup() {
@@ -82,8 +88,24 @@ void setup() {
 	//CAN mailboxes are interrupt-driven, meaning it does stuff when a message appears
 	myCAN.enableMBInterrupts();
 
+	//Reject all incoming messages
+	myCAN.setMBFilter(REJECT_ALL);
+
 	delay(500);
 	calibrateGyro();
+
+}
+
+void sendToBus() {
+	//Check https://docs.google.com/spreadsheets/d/1tEKqx7z3uw22POPMZ_HQZkzSWVvlohXokliIyHb52fE/edit#gid=824743844 for standard
+	canAccelMessage.idhit = 0x360;
+	canAccelMessage.timestamp = millis();
+	
+	canAccelMessage.buf[0] = arrayAverage(xValues);
+	canAccelMessage.buf[1] = arrayAverage(yValues);
+	canAccelMessage.buf[2] = arrayAverage(zValues);
+
+	myCan.write(canAccelMessage);
 
 }
 
@@ -100,9 +122,15 @@ void loop() {
 		zValues[counter] = gyroData.zData;
 
 		//Every 3 loop iterations, average the past 3 gyro data points and print them
-		if (counter == 2) {
+		if (counter == averagerCounter-1) {
+
+			//This commented portion was solely used for testing the acceleration/position calculations by printing them.
+			/*
 			calculateAccel(arrayAverage(xValues), arrayAverage(yValues), arrayAverage(zValues))
 			printGyro(xAngle, yAngle, zAngle);
+			*/
+
+			sendToBus();
 		} else {counter++;}
 
 	}
