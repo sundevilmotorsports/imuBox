@@ -63,8 +63,8 @@ void setup() {
 	myISM.setAccelFullScale(ISM_2g); 
 
 	// Set the output data rate and precision of the gyroscope
-	myISM.setGyroDataRate(ISM_GY_ODR_52Hz);
-	myISM.setGyroFullScale(ISM_125dps); 
+	myISM.setGyroDataRate(ISM_GY_ODR_104Hz);
+	myISM.setGyroFullScale(ISM_250dps); 
 
 	// Turn on the accelerometer's filter and apply settings. 
 	myISM.setAccelFilterLP2();
@@ -72,7 +72,7 @@ void setup() {
 
 	// Turn on the gyroscope's filter and apply settings. 
 	myISM.setGyroFilterLP1();
-	myISM.setGyroLP1Bandwidth(ISM_MEDIUM);
+	myISM.setGyroLP1Bandwidth(ISM_AGGRESSIVE);
 
 	// Turn on CAN bus
 	Can0.begin();
@@ -80,7 +80,7 @@ void setup() {
 	Can0.setMaxMB(16);
 	Can0.enableFIFO();
 	Can0.enableFIFOInterrupt();
-	Can0.mailboxStatus();
+	//Can0.mailboxStatus();
 
 	delay(500);
 
@@ -120,6 +120,13 @@ void loop() {
 		int xGyro = (int) gyroData.xData;
 		int yGyro = (int) gyroData.yData;
 		int zGyro = (int) gyroData.zData;
+		Serial.print(millis()/1000.0);
+		Serial.print(",");
+		Serial.print(zGyro);
+		Serial.print(",");
+		Serial.print(xGyro);
+		Serial.print(",");
+		Serial.println(yGyro);
 
 		msg1.buf[4] = (xGyro & 0xFF000000) >> 24;
 		msg1.buf[5] = (xGyro & 0x00FF0000) >> 16;
@@ -153,10 +160,11 @@ void loop() {
 		} else {counter++;}
 		*/
 
+
 	}
 	    static uint32_t timeout = millis();
   if ( millis() - timeout > 5000 ) {
-    Can0.mailboxStatus();
+    //Can0.mailboxStatus();
     timeout = millis();
   }
 
