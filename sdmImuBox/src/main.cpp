@@ -11,6 +11,8 @@ SparkFun_ISM330DHCX myISM;
 sfe_ism_data_t accelData; 
 sfe_ism_data_t gyroData;
 
+uint8_t hehez = HIGH;
+
 /*
 int xAngle = 0, yAngle = 0, zAngle = 0; //calculated absolute position in the x, y, and z axes
 int xLim = 0, yLim = 0, zLim = 0; //Positive absolute values of the noise threshold determined in calibrateGyro()
@@ -29,6 +31,7 @@ void setup() {
 
 	Serial.begin(115200);
 	pinMode(13, OUTPUT);
+	pinMode(7, OUTPUT);
 
 	delay(100);
 
@@ -83,7 +86,7 @@ void setup() {
 	//Can0.mailboxStatus();
 
 	//Reject all incoming messages
-	myCAN.setMBFilter(REJECT_ALL);
+	Can0.setMBFilter(REJECT_ALL);
 
 	delay(500);
 
@@ -155,6 +158,15 @@ void loop() {
 	if ( millis() - timeout > 5000 ) {
 		//Can0.mailboxStatus();
 		timeout = millis();
+
+		if (hehez == HIGH) {
+			hehez = LOW;
+			digitalWrite(7, hehez);
+		}
+		else {
+			hehez = HIGH;
+			digitalWrite(7, hehez);
+		}
 	}
 
 	delay(20);
