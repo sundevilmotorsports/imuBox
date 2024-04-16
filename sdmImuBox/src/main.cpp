@@ -12,18 +12,10 @@ sfe_ism_data_t accelData;
 sfe_ism_data_t gyroData;
 
 uint8_t hehez = HIGH;
-
-/*
-int xAngle = 0, yAngle = 0, zAngle = 0; //calculated absolute position in the x, y, and z axes
-int xLim = 0, yLim = 0, zLim = 0; //Positive absolute values of the noise threshold determined in calibrateGyro()
-byte counter; //keeps track of which accelerometer values to replace with each setup() interation
-
-//These store the past 3 x, y, and z accelerometer values to be averaged
-int xValues [3];
-int yValues [3];
-int zValues [3];
-*/
-
+float pitch = 0.0, roll = 0.0;
+float pitchAccel = 0.0, rollAccel = 0.0;
+float kpitch = 0.98;
+float kroll = 0.98;
 
 void setup() {
   // put your setup code here, to run once:
@@ -62,20 +54,20 @@ void setup() {
 	myISM.setBlockDataUpdate();
 	
 	// Set the output data rate and precision of the accelerometer
-	myISM.setAccelDataRate(ISM_XL_ODR_104Hz);
+	myISM.setAccelDataRate(ISM_XL_ODR_208Hz);
 	myISM.setAccelFullScale(ISM_2g); 
 
 	// Set the output data rate and precision of the gyroscope
-	myISM.setGyroDataRate(ISM_GY_ODR_104Hz);
-	myISM.setGyroFullScale(ISM_250dps); 
+	myISM.setGyroDataRate(ISM_GY_ODR_208Hz);
+	myISM.setGyroFullScale(ISM_500dps); 
 
 	// Turn on the accelerometer's filter and apply settings. 
 	myISM.setAccelFilterLP2();
 	myISM.setAccelSlopeFilter(ISM_LP_ODR_DIV_100);
 
 	// Turn on the gyroscope's filter and apply settings. 
-	myISM.setGyroFilterLP1();
-	myISM.setGyroLP1Bandwidth(ISM_AGGRESSIVE);
+	//myISM.setGyroFilterLP1();
+	//myISM.setGyroLP1Bandwidth(ISM_AGGRESSIVE);
 
 	// Turn on CAN bus
 	Can0.begin();
@@ -96,7 +88,10 @@ void loop() {
 	digitalWrite(13, HIGH);
 
   // Check if both gyroscope and accelerometer data is available.
+	static int prevTime = millis();
 	if(myISM.checkStatus()){
+		float dt = ((float) millis() - (float) prevTime) / 1000.0;
+		prevTime = millis();
 		myISM.getAccel(&accelData);
 		myISM.getGyro(&gyroData);
 
@@ -126,13 +121,16 @@ void loop() {
 		int xGyro = (int) gyroData.xData;
 		int yGyro = (int) gyroData.yData;
 		int zGyro = (int) gyroData.zData;
-		Serial.print(millis()/1000.0);
-		Serial.print(",");
-		Serial.print(zGyro);
-		Serial.print(",");
-		Serial.print(xGyro);
-		Serial.print(",");
-		Serial.println(yGyro);
+
+		pitchAccel = atan(-yAccel / sqrt(pow(xAccel, 2) + pow(zAccel, 2)));	
+		rollAccel = atan(xAccel / sqrt(pow(yAccel, 2) + pow(zAccel, 2)));
+
+		pitch = kpitch * (pitch + (((float) xGyro) * dt)) + (1.00 - kpitch) * (pitchAccel * 180000.0/3.1415);
+
+
+		Serial.print(pitchAccel * 180000.0/3.1415);
+		Serial.print("\t");
+		Serial.println(pitch);
 
 		msg1.buf[4] = (xGyro & 0xFF000000) >> 24;
 		msg1.buf[5] = (xGyro & 0x00FF0000) >> 16;
@@ -169,5 +167,5 @@ void loop() {
 		}
 	}
 
-	delay(20);
+	//delay(5);
 }
