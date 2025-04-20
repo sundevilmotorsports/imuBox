@@ -18,10 +18,11 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "usb_device.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include "usbd_cdc_if.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -45,11 +46,10 @@ CAN_HandleTypeDef hcan2;
 I2C_HandleTypeDef hi2c1;
 I2C_HandleTypeDef hi2c2;
 
-HCD_HandleTypeDef hhcd_USB_OTG_FS;
-
 /* USER CODE BEGIN PV */
 
 ISM330DHCX_Object_t myISM;
+ISM330DHCX_IO_t io_ctx;
 ISM330DHCX_Axes_t accelData, gyroData;
 
 uint8_t ledState = GPIO_PIN_SET;
@@ -79,7 +79,6 @@ static void MX_GPIO_Init(void);
 static void MX_CAN2_Init(void);
 static void MX_I2C1_Init(void);
 static void MX_I2C2_Init(void);
-static void MX_USB_OTG_FS_HCD_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -107,17 +106,17 @@ int main(void)
 
   /* USER CODE BEGIN Init */
   TxHeader.IDE = CAN_ID_STD;
-  TxHeader.StdId = 0x000;
+  TxHeader.StdId = 0x360;
   TxHeader.RTR = CAN_RTR_DATA;
   TxHeader.DLC = 6;
 
   TxHeader1.IDE = CAN_ID_STD;
-  TxHeader1.StdId = 0x000;
+  TxHeader1.StdId = 0x361;
   TxHeader1.RTR = CAN_RTR_DATA;
   TxHeader1.DLC = 6;
 
   TxHeader2.IDE = CAN_ID_STD;
-  TxHeader2.StdId = 0x000;
+  TxHeader2.StdId = 0x362;
   TxHeader2.RTR = CAN_RTR_DATA;
   TxHeader2.DLC = 6;
   /* USER CODE END Init */
@@ -134,9 +133,21 @@ int main(void)
   MX_CAN2_Init();
   MX_I2C1_Init();
   MX_I2C2_Init();
-  MX_USB_OTG_FS_HCD_Init();
+  MX_USB_DEVICE_Init();
   /* USER CODE BEGIN 2 */
   HAL_Delay(100);
+
+
+  io_ctx.BusType  = ISM330DHCX_I2C_BUS;
+  io_ctx.Address  = (0x6B << 1);
+  io_ctx.Init     = MX_I2C1_Init;
+//  io_ctx.DeInit   = MX_I2C1_DeInit;
+  io_ctx.ReadReg  = BSP_I2C1_ReadReg;
+  io_ctx.WriteReg = BSP_I2C1_WriteReg;
+  io_ctx.GetTick  = HAL_GetTick;
+  ISM330DHCX_RegisterBusIO(&myISM, &io_ctx);
+
+
   if (ISM330DHCX_Init(&myISM) != ISM330DHCX_OK) { // ISM330HDCX OK is equal to 0
 	  	  printf("lmao your ism didnt work lil bro \n");
           Error_Handler();
@@ -145,9 +156,7 @@ int main(void)
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-  int32_t status;
-  status = device_reset(&myISM);
-  if (!status) {
+  if (device_reset(&myISM) != 0) {
 	  printf("ism failed to reset \n");
 	  Error_Handler();
   }
@@ -155,24 +164,39 @@ int main(void)
   config_ism(&myISM);
   //implement CAN here
 
-  ISM330DHCX_ACC_Enable(&myISM);
-  ISM330DHCX_GYRO_Enable(&myISM);
   HAL_Delay(500);
 
   uint32_t prevTime = HAL_GetTick();
+  float dt;
+  int xAccel;
+  int yAccel;
+  int zAccel;
+  int xGyro;
+  int yGyro;
+  int zGyro;
   while (1)
   {
-	  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_6, GPIO_PIN_SET);
+	  // Note that setting it to 0 or GPIO_PIN_RESET will turn on the LED because of board tomfoolery
+//	  HAL_Delay(1000);
+//	  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_6, GPIO_PIN_RESET);
+//	  HAL_Delay(1000);
+//	  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_6, GPIO_PIN_SET);
+//	  HAL_Delay(1000);
+//	  char msg[100];
+//	  sprintf(msg, "burh this be cringlee");
+//	  CDC_Transmit_FS((uint8_t*) msg, strlen(msg));
+//	  HAL_Delay(100);
+	  printf("cringlee");
+
 	  if (ISM330DHCX_ACC_GetAxes(&myISM, &accelData) == ISM330DHCX_OK && ISM330DHCX_GYRO_GetAxes(&myISM, &gyroData) == ISM330DHCX_OK) {
-		  float dt = ((float) HAL_GetTick() - (float) prevTime) / 1000.0;
+		  dt = ((float) HAL_GetTick() - (float) prevTime) / 1000.0;
 		  prevTime = HAL_GetTick();
 
-		  int xAccel = (int) accelData.x;
-		  int yAccel = (int) accelData.y;
-		  int zAccel = (int) accelData.z;
+		  xAccel = (int) accelData.x;
+		  yAccel = (int) accelData.y;
+		  zAccel = (int) accelData.z;
 
 		  //write to CAN
-		  TxHeader.StdId = 0x360;
 		  TxData[0] = (xAccel & 0xFF000000) >> 24;
 		  TxData[1] = (xAccel & 0x00FF0000) >> 16;
 		  TxData[2] = (xAccel & 0x0000FF00) >> 8;
@@ -181,20 +205,24 @@ int main(void)
 		  TxData[5] = (yAccel & 0x00FF0000) >> 16;
 		  TxData[6] = (yAccel & 0x0000FF00) >> 8;
 		  TxData[7] = yAccel & 0xFF;
-		  if (HAL_CAN_AddTxMessage(&hcan2, &TxHeader, TxData, &TxMailbox) != HAL_OK) {
-		     Error_Handler();
+		  if (HAL_CAN_AddTxMessage(&hcan2, &TxHeader, TxData, &TxMailbox) != HAL_OK) { // this only throws error if it stores the message in mailbox incorrectly (realistically)
+//		     Error_Handler();
+			  HAL_Delay(50);
+			  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_6, GPIO_PIN_RESET);
+			  HAL_Delay(50);
+			  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_6, GPIO_PIN_SET);
+			  HAL_Delay(50);
 		  }
 
 		  // Fill half of second can message
-		  TxHeader1.StdId = 0x361;
 		  TxData1[0] = (zAccel & 0xFF000000) >> 24;
 		  TxData1[1] = (zAccel & 0x00FF0000) >> 16;
 		  TxData1[2] = (zAccel & 0x0000FF00) >> 8;
  		  TxData1[3] = zAccel & 0xFF;
 
-		  int xGyro = (int) gyroData.x;
-		  int yGyro = (int) gyroData.y;
-		  int zGyro = (int) gyroData.z;
+		  xGyro = (int) gyroData.x;
+		  yGyro = (int) gyroData.y;
+		  zGyro = (int) gyroData.z;
 
 		  TxData[4] = (xGyro * 0xFF000000) >> 24;
 		  TxData1[5] = (xGyro & 0x00FF0000) >> 16;
@@ -202,11 +230,15 @@ int main(void)
   		  TxData1[7] = xGyro & 0xFF;
 
 		  if (HAL_CAN_AddTxMessage(&hcan2, &TxHeader1, TxData1, &TxMailbox1) != HAL_OK) {
-			 Error_Handler();
+//			 Error_Handler();
+			  HAL_Delay(50);
+			  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_6, GPIO_PIN_RESET);
+			  HAL_Delay(50);
+			  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_6, GPIO_PIN_SET);
+			  HAL_Delay(50);
 		  }
 
 		  //write third CAN message
-		  TxHeader2.StdId = 0x362;
 		  TxData2[0] = (yGyro & 0xFF000000) >> 24;
 		  TxData2[1] = (yGyro & 0x00FF0000) >> 16;
 		  TxData2[2] = (yGyro & 0x0000FF00) >> 8;
@@ -216,28 +248,36 @@ int main(void)
 		  TxData2[6] = (zGyro & 0x0000FF00) >> 8;
 		  TxData2[7] = zGyro & 0xFF;
 		  if (HAL_CAN_AddTxMessage(&hcan2, &TxHeader2, TxData2, &TxMailbox2) != HAL_OK) {
-			 Error_Handler();
+//			 Error_Handler();
+			  HAL_Delay(50);
+			  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_6, GPIO_PIN_RESET);
+			  HAL_Delay(50);
+			  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_6, GPIO_PIN_SET);
+			  HAL_Delay(50);
 		  }
 
-		  pitchAccel = atan2(-yAccel, sqrt(pow(xAccel, 2) + pow(zAccel, 2))) * (180000.0f / M_PI);
-		  rollAccel = atan2(xAccel, sqrt(pow(yAccel, 2) + pow(zAccel, 2))) * (180000.0f / M_PI);
-		  pitch = kpitch * (pitch + ((float)xGyro * dt)) + (1.0f - kpitch) * pitchAccel;
+//		  pitchAccel = atan2(-yAccel, sqrt(pow(xAccel, 2) + pow(zAccel, 2))) * (180000.0f / M_PI);
+//		  rollAccel = atan2(xAccel, sqrt(pow(yAccel, 2) + pow(zAccel, 2))) * (180000.0f / M_PI);
+//		  pitch = kpitch * (pitch + ((float)xGyro * dt)) + (1.0f - kpitch) * pitchAccel;
+//
+//		  printf("%f\t%f\n", pitchAccel * 180000.0/3.1415, pitch);
 
-		  printf("%f\t%f\n", pitchAccel * 180000.0/3.1415, pitch);
-
+	  } else {
+		  Error_Handler();
 	  }
     /* USER CODE END WHILE */
+
     /* USER CODE BEGIN 3 */
 
 	  static uint32_t timeout = 0;
-	  if (HAL_GetTick() - timeout > 5000) {
+	  if (HAL_GetTick() - timeout > 1000) {
 		  ledState = (ledState == GPIO_PIN_SET) ? GPIO_PIN_RESET : GPIO_PIN_SET;
 		  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_6, ledState);
 		  timeout = HAL_GetTick();
 	  }
 
-//	  HAL_Delay(5);
-//	  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_6, GPIO_PIN_RESET);
+	  HAL_Delay(5);
+//	  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_6, GPIO_PIN_RESET);
   }
   /* USER CODE END 3 */
 }
@@ -302,24 +342,27 @@ static void MX_CAN2_Init(void)
   /* USER CODE BEGIN CAN2_Init 1 */
 
   /* USER CODE END CAN2_Init 1 */
-  hcan2.Instance = CAN2;
-  hcan2.Init.Prescaler = 16;
-  hcan2.Init.Mode = CAN_MODE_NORMAL;
-  hcan2.Init.SyncJumpWidth = CAN_SJW_1TQ;
-  hcan2.Init.TimeSeg1 = CAN_BS1_1TQ;
-  hcan2.Init.TimeSeg2 = CAN_BS2_1TQ;
-  hcan2.Init.TimeTriggeredMode = DISABLE;
-  hcan2.Init.AutoBusOff = DISABLE;
-  hcan2.Init.AutoWakeUp = DISABLE;
-  hcan2.Init.AutoRetransmission = DISABLE;
-  hcan2.Init.ReceiveFifoLocked = DISABLE;
-  hcan2.Init.TransmitFifoPriority = DISABLE;
+	hcan2.Instance = CAN2;
+	hcan2.Init.Prescaler = 2;
+	hcan2.Init.Mode = CAN_MODE_NORMAL;
+	hcan2.Init.SyncJumpWidth = CAN_SJW_1TQ;
+	hcan2.Init.TimeSeg1 = CAN_BS1_16TQ;
+	hcan2.Init.TimeSeg2 = CAN_BS2_4TQ;
+	hcan2.Init.TimeTriggeredMode = DISABLE;
+	hcan2.Init.AutoBusOff = ENABLE;
+	hcan2.Init.AutoWakeUp = DISABLE;
+	hcan2.Init.AutoRetransmission = DISABLE;
+	hcan2.Init.ReceiveFifoLocked = DISABLE;
+	hcan2.Init.TransmitFifoPriority = DISABLE;
   if (HAL_CAN_Init(&hcan2) != HAL_OK)
   {
     Error_Handler();
   }
   /* USER CODE BEGIN CAN2_Init 2 */
-
+  if (HAL_CAN_Start(&hcan2) != HAL_OK)
+    {
+  	  Error_Handler();
+    }
   /* USER CODE END CAN2_Init 2 */
 
 }
@@ -393,37 +436,6 @@ static void MX_I2C2_Init(void)
 }
 
 /**
-  * @brief USB_OTG_FS Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_USB_OTG_FS_HCD_Init(void)
-{
-
-  /* USER CODE BEGIN USB_OTG_FS_Init 0 */
-
-  /* USER CODE END USB_OTG_FS_Init 0 */
-
-  /* USER CODE BEGIN USB_OTG_FS_Init 1 */
-
-  /* USER CODE END USB_OTG_FS_Init 1 */
-  hhcd_USB_OTG_FS.Instance = USB_OTG_FS;
-  hhcd_USB_OTG_FS.Init.Host_channels = 8;
-  hhcd_USB_OTG_FS.Init.speed = HCD_SPEED_FULL;
-  hhcd_USB_OTG_FS.Init.dma_enable = DISABLE;
-  hhcd_USB_OTG_FS.Init.phy_itface = HCD_PHY_EMBEDDED;
-  hhcd_USB_OTG_FS.Init.Sof_enable = DISABLE;
-  if (HAL_HCD_Init(&hhcd_USB_OTG_FS) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN USB_OTG_FS_Init 2 */
-
-  /* USER CODE END USB_OTG_FS_Init 2 */
-
-}
-
-/**
   * @brief GPIO Initialization Function
   * @param None
   * @retval None
@@ -431,8 +443,8 @@ static void MX_USB_OTG_FS_HCD_Init(void)
 static void MX_GPIO_Init(void)
 {
   GPIO_InitTypeDef GPIO_InitStruct = {0};
-/* USER CODE BEGIN MX_GPIO_Init_1 */
-/* USER CODE END MX_GPIO_Init_1 */
+  /* USER CODE BEGIN MX_GPIO_Init_1 */
+  /* USER CODE END MX_GPIO_Init_1 */
 
   /* GPIO Ports Clock Enable */
   __HAL_RCC_GPIOH_CLK_ENABLE();
@@ -455,8 +467,8 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
-/* USER CODE BEGIN MX_GPIO_Init_2 */
-/* USER CODE END MX_GPIO_Init_2 */
+  /* USER CODE BEGIN MX_GPIO_Init_2 */
+  /* USER CODE END MX_GPIO_Init_2 */
 }
 
 /* USER CODE BEGIN 4 */
@@ -488,11 +500,6 @@ int device_reset(ISM330DHCX_Object_t *ism) {
 }
 
 void config_ism(ISM330DHCX_Object_t *ism) {
-	// enable block update
-    if (ISM330DHCX_Write_Reg(ism, ISM330DHCX_CTRL3_C, 0x40) != ISM330DHCX_OK) {
-        Error_Handler();
-    }
-
     // set acc data rate to 208hz
     if (ISM330DHCX_ACC_SetOutputDataRate(ism, 208.0f) != ISM330DHCX_OK) {
         Error_Handler();
@@ -530,7 +537,27 @@ void config_ism(ISM330DHCX_Object_t *ism) {
 //    if (ISM330DHCX_Write_Reg(ism, ISM330DHCX_CTRL4_C, 0x00) != ISM330DHCX_OK) {
 //        Error_Handler();
 //    }
+    if (ISM330DHCX_ACC_Enable(&myISM) != ISM330DHCX_OK || ISM330DHCX_GYRO_Enable(&myISM) != ISM330DHCX_OK) {
+        Error_Handler();
+     }
 }
+
+static int32_t BSP_I2C1_ReadReg(uint8_t Address, uint8_t Reg, uint8_t *pData, uint16_t Length) {
+  if (HAL_I2C_Mem_Read(&hi2c1, Address, Reg, I2C_MEMADD_SIZE_8BIT, pData, Length, HAL_MAX_DELAY) == HAL_OK) {
+    return 0;
+  }
+  return -1;
+}
+
+static int32_t BSP_I2C1_WriteReg(uint8_t Address, uint8_t Reg, uint8_t *pData, uint16_t Length) {
+  if (HAL_I2C_Mem_Write(&hi2c1, Address, Reg, I2C_MEMADD_SIZE_8BIT, pData, Length, HAL_MAX_DELAY) == HAL_OK) {
+    return 0;
+  }
+  return -1;
+}
+
+
+
 /* USER CODE END 4 */
 
 /**
@@ -541,10 +568,14 @@ void Error_Handler(void)
 {
   /* USER CODE BEGIN Error_Handler_Debug */
   /* User can add his own implementation to report the HAL error return state */
-  __disable_irq();
+//  __disable_irq();
+//  HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_13);
   while (1)
   {
-	  HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_13);
+	  HAL_Delay(100);
+	  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_6, GPIO_PIN_SET);
+	  HAL_Delay(100);
+	  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_6, GPIO_PIN_RESET);
 	  HAL_Delay(100);
   }
   /* USER CODE END Error_Handler_Debug */

@@ -57,6 +57,8 @@ void Error_Handler(void);
 /* USER CODE BEGIN EFP */
 int device_reset(ISM330DHCX_Object_t *ism);
 void config_ism(ISM330DHCX_Object_t *ism);
+static int32_t BSP_I2C1_ReadReg(uint8_t Address, uint8_t Reg, uint8_t *pData, uint16_t Length);
+static int32_t BSP_I2C1_WriteReg(uint8_t Address, uint8_t Reg, uint8_t *pData, uint16_t Length);
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
